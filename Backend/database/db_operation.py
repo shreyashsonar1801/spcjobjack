@@ -20,6 +20,19 @@ class DB:
         cursor.close()
         return data
     
+    def execute_non_query(self, query, values):
+        cursor = self.connection.cursor()
+        cursor.execute(query, values)
+        self.connection.commit()
+        cursor.close()
+
+    def fetch_one(self, query: str, values: tuple):
+        """Use for SELECT queries expected to return a single row."""
+        with self.connection.cursor() as cursor:
+            cursor.execute(query, values)
+            return cursor.fetchone()
+
+    
     def close_connection(self):
         if self.connection:
             self.connection.close()

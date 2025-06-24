@@ -1,7 +1,7 @@
 import configparser
 import os
 
-# Load the environment or default to DEV
+# Load the environment or default to LOCAL
 ENV = os.environ.get("ENV", "LOCAL").upper()
 
 # Initialize configparser and read the file
