@@ -16,34 +16,55 @@ def get_db_connection():
 def signup():
     data = request.get_json()
     required = ['username', 'password', 'first_name', 'last_name', 'email']
-    
+
     if not all(field in data for field in required):
         return jsonify({"error": "Missing required fields"}), 400
 
     hashed_password = pm.hash_password(data['password'])
 
     try:
-        # Create DB instance with config
         db = DB(DATABASE_CONFIG)
 
-        query = """
-            INSERT INTO users (username, user_password, first_name, last_name, email)
-            VALUES (%s, %s, %s, %s, %s)
+        # STEP 1: Create temporary table (no values needed)
+        temp_query = "CREATE TEMP TABLE temp_user AS SELECT * FROM users LIMIT 0"
+        db.execute_non_query(temp_query, ())  # <- pass empty tuple to satisfy values arg
+
+        # STEP 2: Determine user_id
+        user_id = data.get('user_id', 0)
+
+        # STEP 3: Insert into temp table
+        insert_query = """
+            INSERT INTO temp_user (user_id, username, user_password, first_name, last_name, email)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """
         values = (
+            user_id,
             data['username'].lower(),
             hashed_password,
             data['first_name'],
             data['last_name'],
             data['email']
         )
+        db.execute_non_query(insert_query, values)
 
-        db.execute_non_query(query, values)
-        db.close_connection()
-        return jsonify({"message": "User registered successfully"}), 201
+        # STEP 4: Call the upsert function
+        upsert_query = "SELECT crud_upsert_users('temp_user')"
+        result = db.execute_query(upsert_query)
+
+        # STEP 5: Drop the temp table only if upsert was successful
+        if result and result[0][0] == 'success':
+            db.execute_non_query("DROP TABLE temp_user", ())
+            db.close_connection()
+            return jsonify({"message": "User registered successfully"}), 201
+        else:
+            db.close_connection()
+            return jsonify({"error": "Upsert failed"}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+
 
 
 @app.route('/signin', methods=['POST'])
